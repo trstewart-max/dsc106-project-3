@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>US Tourism Climate Suitability Index</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Fira+Code:wght@300;400;500&display=swap" rel="stylesheet">
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg:        #060d1b;
+      --surface:   #0c1929;
+      --surface2:  #132236;
+      --border:    #1c3250;
+      --text:      #ddeeff;
+      --text-dim:  #5e7fa0;
+      --accent:    #00d4ff;
+      --wc:  #3b82f6;
+      --nw:  #22c55e;
+      --sh:  #f97316;
+      --ec:  #c084fc;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+      overflow: hidden;
+    }
+
+    /* ─── HEADER ─────────────────────────────────────────── */
+    .header {
+      height: 58px;
+      padding: 0 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(0,212,255,0.04) 0%, transparent 100%);
+      flex-shrink: 0;
+    }
+    .header-title {
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
+    }
+    .header-title h1 {
+      font-size: 17px;
+      font-weight: 800;
+      letter-spacing: 0.3px;
+    }
+    .header-title .sub {
+      font-family: 'Fira Code', monospace;
+      font-size: 10px;
+      color: var(--text-dim);
+    }
+    .scenario-tabs { display: flex; gap: 5px; }
+    .scenario-tab {
+      padding: 6px 14px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-dim);
+      font-family: 'Fira Code', monospace;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.18s;
+    }
+    .scenario-tab:hover { border-color: var(--accent); color: var(--accent); }
+    .scenario-tab.active.historical { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 600; }
+    .scenario-tab.active.ssp126 { background: #22c55e; border-color: #22c55e; color: #000; font-weight: 600; }
+    .scenario-tab.active.ssp245 { background: #f59e0b; border-color: #f59e0b; color: #000; font-weight: 600; }
+    .scenario-tab.active.ssp585 { background: #ef4444; border-color: #ef4444; color: #fff; font-weight: 600; }
+
+    /* ─── MAIN LAYOUT ────────────────────────────────────── */
+    .main {
+      height: calc(100vh - 58px);
+      display: grid;
+      grid-template-columns: 1fr 390px;
+    }
+
+    /* ─── MAP PANEL ──────────────────────────────────────── */
+    .map-panel {
+      position: relative;
+      overflow: hidden;
+      background: radial-gradient(ellipse at 48% 55%, #0a1f38 0%, #060d1b 68%);
+    }
+    #map-svg { width: 100%; height: 100%; }
+
+    .state-path {
+      stroke: #182e48;
+      stroke-width: 0.5px;
+      cursor: pointer;
+    }
+
+    /* Year badge */
+    .year-badge {
+      position: absolute;
+      top: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(6, 13, 27, 0.82);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      padding: 7px 22px;
+      text-align: center;
+      pointer-events: none;
+    }
+    .year-badge-num {
+      font-family: 'Fira Code', monospace;
+      font-size: 30px;
+      font-weight: 500;
+      color: var(--accent);
+      line-height: 1;
+    }
+    .year-badge-lbl {
+      font-family: 'Fira Code', monospace;
+      font-size: 9px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      margin-top: 2px;
+    }
+
+    /* Color legend */
+    .color-legend {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      background: rgba(6,13,27,0.88);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      padding: 11px 15px;
+    }
+    .color-legend-title {
+      font-family: 'Fira Code', monospace;
+      font-size: 9px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      margin-bottom: 7px;
+    }
+    #legend-svg { display: block; }
+    .legend-tick {
+      font-family: 'Fira Code', monospace;
+      font-size: 9px;
+      fill: var(--text-dim);
+    }
+
+    /* Region labels on map */
+    .region-map-label {
+      font-family: 'Fira Code', monospace;
+      font-size: 10px;
+      fill: rgba(255,255,255,0.55);
+      text-anchor: middle;
+      pointer-events: none;
+      font-weight: 500;
+    }
+
+    /* ─── RIGHT PANEL ────────────────────────────────────── */
+    .right-panel {
+      display: flex;
+      flex-direction: column;
+      border-left: 1px solid var(--border);
+      background: var(--surface);
+      overflow: hidden;
+    }
+
+    /* Year control */
+    .year-ctrl {
+      padding: 16px 22px 14px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .year-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .ctrl-label {
+      font-family: 'Fira Code', monospace;
+      font-size: 9px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+    }
+    #year-display {
+      font-family: 'Fira Code', monospace;
+      font-size: 29px;
+      font-weight: 500;
+      color: var(--accent);
+      line-height: 1;
+    }
+    .slider-row { display: flex; align-items: center; gap: 9px; }
+    #play-btn {
+      width: 30px; height: 30px;
+      border-radius: 50%;
+      border: 1px solid var(--accent);
+      background: transparent;
+      color: var(--accent);
+      font-size: 11px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      transition: all 0.18s;
+    }
+    #play-btn:hover { background: var(--accent); color: var(--bg); }
+    #year-slider {
+      flex: 1;
+      -webkit-appearance: none;
+      height: 3px;
+      border-radius: 2px;
+      background: var(--border);
+      outline: none;
+      cursor: pointer;
+    }
+    #year-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      box-shadow: 0 0 7px rgba(0,212,255,0.55);
+    }
+    .slider-range-labels {
+      display: flex; justify-content: space-between;
+      margin-top: 4px;
+    }
+    .range-lbl {
+      font-family: 'Fira Code', monospace;
+      font-size: 9px; color: var(--text-dim);
+    }
+
+    /* Season control */
+    .season-ctrl {
+      padding: 12px 22px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .season-btns { display: flex; gap: 5px; margin-top: 8px; }
+    .season-btn {
+      flex: 1;
+      padding: 5px 0;
+      border-radius: 5px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-dim);
+      font-family: 'Fira Code', monospace;
+      font-size: 10px;
+      cursor: pointer;
+      transition: all 0.16s;
+      text-align: center;
+    }
+    .season-btn:hover { border-color: #5e7fa0; color: var(--text); }
+    .season-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(0,212,255,0.08); }
+
+    /* Chart area */
+    .chart-area {
+      flex: 1;
+      min-height: 0;
+      padding: 14px 18px 6px 18px;
+      display: flex;
+      flex-direction: column;
+    }
+    .chart-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+      flex-shrink: 0;
+    }
+    #chart-scenario-lbl {
+      font-family: 'Fira Code', monospace;
+      font-size: 10px;
+      color: var(--text-dim);
+    }
+    #chart-svg { flex: 1; width: 100%; min-height: 0; }
+
+    /* Region legend */
+    .region-legend {
+      flex-shrink: 0;
+      padding: 10px 22px 12px;
+      border-top: 1px solid var(--border);
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+    }
+    .rl-item {
+      display: flex; align-items: center; gap: 7px;
+      padding: 4px 6px;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background 0.14s;
+    }
+    .rl-item:hover { background: var(--surface2); }
+    .rl-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .rl-name { font-family: 'Fira Code', monospace; font-size: 10px; color: var(--text-dim); flex: 1; }
+    .rl-val  { font-family: 'Fira Code', monospace; font-size: 10px; font-weight: 500; }
+
+    /* ─── TOOLTIP ────────────────────────────────────────── */
+    #tooltip {
+      position: fixed;
+      background: rgba(4,10,20,0.96);
+      backdrop-filter: blur(14px);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 13px 16px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.13s;
+      z-index: 999;
+      min-width: 190px;
+    }
+    #tooltip.show { opacity: 1; }
+    .tt-header {
+      font-size: 13px; font-weight: 700;
+      padding-bottom: 9px; margin-bottom: 9px;
+      border-bottom: 1px solid var(--border);
+    }
+    .tt-row {
+      display: flex; justify-content: space-between; align-items: center;
+      margin: 5px 0;
+    }
+    .tt-key { font-family: 'Fira Code', monospace; font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.8px; }
+    .tt-val { font-family: 'Fira Code', monospace; font-size: 11px; }
+    .tt-bar-bg {
+      height: 5px; border-radius: 3px;
+      background: var(--border); margin-top: 10px; overflow: hidden;
+    }
+    #tt-bar-fill { height: 100%; border-radius: 3px; transition: width 0.2s; }
+  </style>
+</head>
+<body>
+
+<!-- ────────── HEADER ────────── -->
+<div class="header">
+  <div class="header-title">
+    <h1>US Tourism Climate Suitability Index</h1>
+    <span class="sub">CMIP6 · 1950–2100 · DSC 106</span>
+  </div>
+  <div class="scenario-tabs">
+    <button class="scenario-tab historical active" data-scenario="historical">Historical</button>
+    <button class="scenario-tab ssp126"            data-scenario="ssp126">SSP1-2.6</button>
+    <button class="scenario-tab ssp245"            data-scenario="ssp245">SSP2-4.5</button>
+    <button class="scenario-tab ssp585"            data-scenario="ssp585">SSP5-8.5</button>
+  </div>
+</div>
+
+<!-- ────────── MAIN ────────── -->
+<div class="main">
+
+  <!-- MAP -->
+  <div class="map-panel">
+    <svg id="map-svg"></svg>
+    <div class="year-badge">
+      <div class="year-badge-lbl">Viewing Year</div>
+      <div class="year-badge-num" id="badge-year">1980</div>
+    </div>
+    <div class="color-legend">
+      <div class="color-legend-title">Tourism Climate Suitability</div>
+      <svg id="legend-svg" width="170" height="22"></svg>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="right-panel">
+
+    <!-- Year slider -->
+    <div class="year-ctrl">
+      <div class="year-row">
+        <span class="ctrl-label">Selected Year</span>
+        <span id="year-display">1980</span>
+      </div>
+      <div class="slider-row">
+        <button id="play-btn" title="Animate">▶</button>
+        <input type="range" id="year-slider" min="1950" max="2014" value="1980" step="1">
+      </div>
+      <div class="slider-range-labels">
+        <span class="range-lbl" id="range-min">1950</span>
+        <span class="range-lbl" id="range-max">2014</span>
+      </div>
+    </div>
+
+    <!-- Season selector -->
+    <div class="season-ctrl">
+      <span class="ctrl-label">Season</span>
+      <div class="season-btns">
+        <button class="season-btn active" data-season="annual">Annual</button>
+        <button class="season-btn"        data-season="winter">Winter</button>
+        <button class="season-btn"        data-season="spring">Spring</button>
+        <button class="season-btn"        data-season="summer">Summer</button>
+        <button class="season-btn"        data-season="fall">Fall</button>
+      </div>
+    </div>
+
+    <!-- Line chart -->
+    <div class="chart-area">
+      <div class="chart-header">
+        <span class="ctrl-label">TCSI Trend</span>
+        <span id="chart-scenario-lbl">Historical (1950–2014)</span>
+      </div>
+      <svg id="chart-svg"></svg>
+    </div>
+
+    <!-- Region legend -->
+    <div class="region-legend" id="region-legend"></div>
+  </div>
+</div>
+
+<!-- TOOLTIP -->
+<div id="tooltip">
+  <div class="tt-header" id="tt-region">—</div>
+  <div class="tt-row"><span class="tt-key">TCSI</span>     <span class="tt-val" id="tt-tcsi">—</span></div>
+  <div class="tt-row"><span class="tt-key">Year</span>     <span class="tt-val" id="tt-year">—</span></div>
+  <div class="tt-row"><span class="tt-key">Scenario</span> <span class="tt-val" id="tt-scen">—</span></div>
+  <div class="tt-row"><span class="tt-key">vs 1980</span>  <span class="tt-val" id="tt-delta">—</span></div>
+  <div class="tt-bar-bg"><div id="tt-bar-fill"></div></div>
+</div>
+
+<script>
+/* ================================================================
+   REPLACE generateData() with:
+     d3.json("data/tcsi_us_regions.json").then(rawData => {
+       // rawData is [{scenario,region,year,tcsi}, ...]
+       ALL_DATA = pivotData(rawData);
+       initApp();
+     });
+   once your Python pipeline has exported the real data.
+================================================================ */
+
+// ─── CONSTANTS ────────────────────────────────────────────────────
+const REGIONS = {
+  'West Coast':           { color: '#3b82f6', cssVar: '--wc' },
+  'Northwest / Mountain': { color: '#22c55e', cssVar: '--nw' },
+  'South':                { color: '#f97316', cssVar: '--sh' },
+  'East Coast':           { color: '#c084fc', cssVar: '--ec' },
+};
+const RNAMES = Object.keys(REGIONS);
+
+// FIPS → Region
+const FIPS_REGION = {
+  '06':'West Coast','41':'West Coast','53':'West Coast','32':'West Coast','04':'West Coast',
+  '30':'Northwest / Mountain','16':'Northwest / Mountain','56':'Northwest / Mountain',
+  '08':'Northwest / Mountain','49':'Northwest / Mountain','35':'Northwest / Mountain',
+  '38':'Northwest / Mountain','46':'Northwest / Mountain','31':'Northwest / Mountain','20':'Northwest / Mountain',
+  '48':'South','22':'South','28':'South','01':'South','12':'South','13':'South',
+  '45':'South','05':'South','47':'South','40':'South','37':'South',
+  '23':'East Coast','33':'East Coast','50':'East Coast','25':'East Coast','44':'East Coast',
+  '09':'East Coast','36':'East Coast','42':'East Coast','34':'East Coast','10':'East Coast',
+  '24':'East Coast','51':'East Coast','54':'East Coast','21':'East Coast','39':'East Coast',
+  '18':'East Coast','26':'East Coast','55':'East Coast','27':'East Coast','19':'East Coast',
+  '29':'East Coast','17':'East Coast','11':'East Coast',
+};
+
+// Region label positions for map overlay (approximate AlbersUSA screen coords set at runtime)
+const REGION_LABEL_CENTERS = {
+  'West Coast':           [-120, 39],  // lon, lat
+  'Northwest / Mountain': [-109, 45],
+  'South':                [-93,  31],
+  'East Coast':           [-77,  40],
+};
+
+const SCENARIO_LABELS = {
+  historical: 'Historical (1950–2014)',
+  ssp126:     'SSP1-2.6 · Low Emissions (2015–2100)',
+  ssp245:     'SSP2-4.5 · Intermediate (2015–2100)',
+  ssp585:     'SSP5-8.5 · High Emissions (2015–2100)',
+};
+
+// Season TCSI modifiers per region (add to base annual TCSI)
+const SEASON_MOD = {
+  annual: { 'West Coast': 0,      'Northwest / Mountain': 0,     'South': 0,      'East Coast': 0     },
+  winter: { 'West Coast':-0.04,   'Northwest / Mountain': 0.09,  'South': 0.13,   'East Coast':-0.13  },
+  spring: { 'West Coast': 0.05,   'Northwest / Mountain': 0.03,  'South': 0.05,   'East Coast': 0.07  },
+  summer: { 'West Coast': 0.07,   'Northwest / Mountain': 0.06,  'South':-0.14,   'East Coast': 0.04  },
+  fall:   { 'West Coast': 0.03,   'Northwest / Mountain':-0.02,  'South': 0.06,   'East Coast': 0.02  },
+};
+
+// ─── DATA GENERATION ──────────────────────────────────────────────
+// Seeded pseudo-random (LCG) for reproducible noise
+function lcg(seed) {
+  let s = seed >>> 0;
+  return () => { s = (Math.imul(1664525, s) + 1013904223) >>> 0; return s / 4294967296; };
+}
+
+const HIST_PARAMS = {
+  'West Coast':           { base: 0.720, slope: -0.00060, noise: 0.024 },
+  'Northwest / Mountain': { base: 0.740, slope: -0.00080, noise: 0.027 },
+  'South':                { base: 0.618, slope: -0.00100, noise: 0.029 },
+  'East Coast':           { base: 0.700, slope: -0.00070, noise: 0.025 },
+};
+const FUTURE_EXTRA_SLOPE = {
+  ssp126: { 'West Coast':-0.00030,'Northwest / Mountain':-0.00075,'South':-0.00070,'East Coast':-0.00025 },
+  ssp245: { 'West Coast':-0.00095,'Northwest / Mountain':-0.00150,'South':-0.00175,'East Coast':-0.00095 },
+  ssp585: { 'West Coast':-0.00220,'Northwest / Mountain':-0.00275,'South':-0.00340,'East Coast':-0.00195 },
+};
+
+function generateData() {
+  const out = { historical:{}, ssp126:{}, ssp245:{}, ssp585:{} };
+
+  RNAMES.forEach((region, ri) => {
+    const p = HIST_PARAMS[region];
+    const rh = lcg(ri * 1337 + 7);
+    out.historical[region] = [];
+    for (let y = 1950; y <= 2014; y++) {
+      const v = p.base + p.slope * (y - 1950) + (rh() - 0.5) * p.noise * 2;
+      out.historical[region].push({ year: y, tcsi: +Math.max(0.05, Math.min(0.97, v)).toFixed(4) });
+    }
+    const v2014 = out.historical[region][out.historical[region].length - 1].tcsi;
+
+    ['ssp126','ssp245','ssp585'].forEach((scen, si) => {
+      const rf = lcg(ri * 999 + si * 444 + 13);
+      const extraSlope = FUTURE_EXTRA_SLOPE[scen][region];
+      out[scen][region] = [];
+      for (let y = 2015; y <= 2100; y++) {
+        const v = v2014 + (p.slope + extraSlope) * (y - 2014) + (rf() - 0.5) * p.noise * 1.4;
+        out[scen][region].push({ year: y, tcsi: +Math.max(0.05, Math.min(0.97, v)).toFixed(4) });
+      }
+    });
+  });
+  return out;
+}
+
+const ALL_DATA = generateData();
+
+// ─── HELPERS ──────────────────────────────────────────────────────
+function getTCSI(region, scenario, year, season) {
+  const scen = ALL_DATA[scenario];
+  if (!scen || !scen[region]) return null;
+  const row = scen[region].find(d => d.year === year);
+  if (!row) return null;
+  const mod = SEASON_MOD[season]?.[region] ?? 0;
+  return Math.max(0.05, Math.min(0.97, row.tcsi + mod));
+}
+
+function getBaseline(region) {
+  const r = ALL_DATA.historical[region].find(d => d.year === 1980);
+  return r ? r.tcsi : 0.65;
+}
+
+// Full series for chart (always historical backbone + optional future)
+function getChartSeries(region, scenario, season) {
+  const mod = SEASON_MOD[season]?.[region] ?? 0;
+  const clamp = v => Math.max(0.05, Math.min(0.97, v + mod));
+
+  const hist = (ALL_DATA.historical[region] || []).map(d => ({
+    year: d.year, tcsi: clamp(d.tcsi), phase: 'hist'
+  }));
+  const fut = (scenario !== 'historical' && ALL_DATA[scenario]?.[region])
+    ? ALL_DATA[scenario][region].map(d => ({ year: d.year, tcsi: clamp(d.tcsi), phase: 'fut' }))
+    : [];
+  return { hist, fut, combined: [...hist, ...fut] };
+}
+
+// ─── COLOR SCALE ──────────────────────────────────────────────────
+const colorScale = d3.scaleSequential()
+  .domain([0.18, 0.88])
+  .interpolator(d3.interpolateRdYlGn);
+
+// ─── APP STATE ────────────────────────────────────────────────────
+const S = { scenario: 'historical', year: 1980, season: 'annual', hoveredRegion: null };
+
+// ─── MAP ──────────────────────────────────────────────────────────
+const mapSvg      = d3.select('#map-svg');
+const mapG        = mapSvg.append('g').attr('class', 'map-root');
+const statesG     = mapG.append('g').attr('class', 'states');
+const bordersG    = mapG.append('g').attr('class', 'borders');
+const labelsG     = mapG.append('g').attr('class', 'labels');
+
+const projection  = d3.geoAlbersUsa();
+const pathGen     = d3.geoPath().projection(projection);
+let   stateFeatures = [];
+
+function drawLegend() {
+  const svg  = d3.select('#legend-svg');
+  const W = 170, barH = 9, n = 100;
+  const step = W / n;
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1);
+    svg.append('rect').attr('x', i*step).attr('y', 0)
+      .attr('width', step+0.5).attr('height', barH)
+      .attr('fill', colorScale(0.18 + t * 0.70));
+  }
+  // Tick marks
+  [[0,'Poor'],[0.5,'Fair'],[1,'Ideal']].forEach(([t, lbl]) => {
+    svg.append('text').attr('x', t * W).attr('y', barH+10)
+      .attr('class','legend-tick').attr('text-anchor','middle').text(lbl);
+  });
+}
+drawLegend();
+
+function initMap(topo) {
+  const el = document.getElementById('map-svg');
+  const W  = el.clientWidth, H = el.clientHeight;
+
+  stateFeatures = topojson.feature(topo, topo.objects.states).features;
+  projection.fitSize([W * 0.94, H * 0.92], { type: 'FeatureCollection', features: stateFeatures });
+  const [tx, ty] = projection.translate();
+  projection.translate([tx + W*0.03, ty + H*0.04]);
+
+  // States
+  statesG.selectAll('.sp')
+    .data(stateFeatures)
+    .join('path')
+    .attr('class','sp state-path')
+    .attr('d', pathGen)
+    .attr('fill', d => {
+      const region = FIPS_REGION[String(d.id).padStart(2,'0')];
+      if (!region) return '#101e30';
+      const t = getTCSI(region, S.scenario, S.year, S.season);
+      return t != null ? colorScale(t) : '#101e30';
+    })
+    .on('mouseover', onStateOver)
+    .on('mousemove', onStateMove)
+    .on('mouseout',  onStateOut)
+    .on('click',     onStateClick);
+
+  // Borders mesh
+  bordersG.append('path')
+    .datum(topojson.mesh(topo, topo.objects.states, (a,b)=>a!==b))
+    .attr('fill','none')
+    .attr('stroke','#182e48')
+    .attr('stroke-width','0.6px')
+    .attr('d', pathGen)
+    .attr('pointer-events','none');
+
+  // Region labels
+  Object.entries(REGION_LABEL_CENTERS).forEach(([region, [lon, lat]]) => {
+    const pt = projection([lon, lat]);
+    if (!pt) return;
+    labelsG.append('text')
+      .attr('class','region-map-label')
+      .attr('x', pt[0]).attr('y', pt[1])
+      .attr('fill', REGIONS[region].color)
+      .attr('opacity', 0.65)
+      .text(region);
+  });
+}
+
+function updateMapFill() {
+  statesG.selectAll('.sp')
+    .transition().duration(380).ease(d3.easeQuadOut)
+    .attr('fill', d => {
+      const region = FIPS_REGION[String(d.id).padStart(2,'0')];
+      if (!region) return '#101e30';
+      const t = getTCSI(region, S.scenario, S.year, S.season);
+      return t != null ? colorScale(t) : '#101e30';
+    });
+  document.getElementById('badge-year').textContent = S.year;
+}
+
+function highlightRegion(region) {
+  statesG.selectAll('.sp')
+    .transition().duration(160)
+    .attr('opacity', d => FIPS_REGION[String(d.id).padStart(2,'0')] === region ? 1 : 0.38)
+    .attr('stroke', d => FIPS_REGION[String(d.id).padStart(2,'0')] === region ? REGIONS[region].color : '#182e48')
+    .attr('stroke-width', d => FIPS_REGION[String(d.id).padStart(2,'0')] === region ? '1.4px' : '0.5px');
+}
+
+function clearHighlight() {
+  statesG.selectAll('.sp')
+    .transition().duration(200)
+    .attr('opacity', 1)
+    .attr('stroke', '#182e48')
+    .attr('stroke-width','0.5px');
+}
+
+// ─── MAP EVENTS ───────────────────────────────────────────────────
+function onStateOver(event, d) {
+  const region = FIPS_REGION[String(d.id).padStart(2,'0')];
+  if (!region) return;
+  S.hoveredRegion = region;
+  highlightRegion(region);
+  updateChartLines();
+  showTooltip(event, region);
+}
+function onStateMove(event, d) {
+  const region = FIPS_REGION[String(d.id).padStart(2,'0')];
+  if (region) moveTooltip(event);
+}
+function onStateOut() {
+  S.hoveredRegion = null;
+  clearHighlight();
+  updateChartLines();
+  hideTooltip();
+}
+function onStateClick(event, d) {
+  // Clicking locks focus on that region's line chart - extend if desired
+}
+
+// ─── TOOLTIP ──────────────────────────────────────────────────────
+const ttEl = document.getElementById('tooltip');
+function showTooltip(e, region) {
+  const t      = getTCSI(region, S.scenario, S.year, S.season);
+  const base   = getBaseline(region);
+  const delta  = t - base;
+  document.getElementById('tt-region').textContent = region;
+  document.getElementById('tt-region').style.color = REGIONS[region].color;
+  document.getElementById('tt-tcsi').textContent   = t.toFixed(3);
+  document.getElementById('tt-year').textContent   = S.year;
+  document.getElementById('tt-scen').textContent   = SCENARIO_LABELS[S.scenario].split(' ·')[0].split(' (')[0];
+  const dEl = document.getElementById('tt-delta');
+  dEl.textContent   = (delta >= 0 ? '+' : '') + delta.toFixed(3);
+  dEl.style.color   = delta >= 0 ? '#22c55e' : '#ef4444';
+  const fill = document.getElementById('tt-bar-fill');
+  fill.style.width      = `${t*100}%`;
+  fill.style.background = colorScale(t);
+  moveTooltip(e);
+  ttEl.classList.add('show');
+}
+function moveTooltip(e) {
+  let x = e.clientX + 14, y = e.clientY - 14;
+  if (x + 210 > window.innerWidth)  x = e.clientX - 220;
+  if (y + 175 > window.innerHeight) y = e.clientY - 175;
+  ttEl.style.left = x + 'px';
+  ttEl.style.top  = y + 'px';
+}
+function hideTooltip() { ttEl.classList.remove('show'); }
+
+// ─── LINE CHART ───────────────────────────────────────────────────
+const CM = { t:10, r:18, b:34, l:40 };
+let chartReady = false, xS, yS, chartG, yLine;
+
+function initChart() {
+  const el = document.getElementById('chart-svg');
+  const W  = el.clientWidth  - CM.l - CM.r;
+  const H  = el.clientHeight - CM.t - CM.b;
+
+  const cSvg = d3.select('#chart-svg');
+  chartG = cSvg.append('g').attr('transform', `translate(${CM.l},${CM.t})`);
+
+  xS = d3.scaleLinear().domain([1950, 2100]).range([0, W]);
+  yS = d3.scaleLinear().domain([0, 1]).range([H, 0]);
+
+  // Grid
+  const gridG = chartG.append('g').attr('class','cgrid');
+  [0.2, 0.4, 0.6, 0.8].forEach(v => {
+    gridG.append('line').attr('x1',0).attr('x2',W)
+      .attr('y1',yS(v)).attr('y2',yS(v))
+      .attr('stroke','#182e48').attr('stroke-width',1);
+  });
+
+  // Axes
+  chartG.append('g').attr('class','cx').attr('transform',`translate(0,${H})`)
+    .call(d3.axisBottom(xS)
+      .tickValues([1960,1980,2000,2020,2040,2060,2080,2100])
+      .tickFormat(d3.format('d')).tickSize(4))
+    .call(g => g.select('.domain').attr('stroke','#1c3250'))
+    .call(g => g.selectAll('.tick line').attr('stroke','#1c3250'))
+    .call(g => g.selectAll('text')
+      .attr('fill','#5e7fa0').attr('font-family','Fira Code,monospace').attr('font-size',9));
+
+  chartG.append('g').attr('class','cy')
+    .call(d3.axisLeft(yS).ticks(5).tickFormat(d3.format('.1f')).tickSize(4))
+    .call(g => g.select('.domain').attr('stroke','#1c3250'))
+    .call(g => g.selectAll('.tick line').attr('stroke','#1c3250'))
+    .call(g => g.selectAll('text')
+      .attr('fill','#5e7fa0').attr('font-family','Fira Code,monospace').attr('font-size',9));
+
+  // Historical/future divider
+  chartG.append('line').attr('class','divider')
+    .attr('x1',xS(2015)).attr('x2',xS(2015)).attr('y1',0).attr('y2',H)
+    .attr('stroke','#2a4060').attr('stroke-dasharray','4,3').attr('stroke-width',1);
+  chartG.append('text').attr('class','divider-lbl')
+    .attr('x',xS(2015)+4).attr('y',12)
+    .attr('fill','#3a5878').attr('font-size',9).attr('font-family','Fira Code,monospace')
+    .text('Projections →');
+
+  // Lines layer
+  chartG.append('g').attr('class','clines');
+
+  // Year indicator
+  yLine = chartG.append('line').attr('class','y-ind')
+    .attr('y1',0).attr('y2',H)
+    .attr('stroke',    '#00d4ff')
+    .attr('stroke-width', 1.5)
+    .attr('opacity', 0.75);
+
+  chartReady = true;
+  updateChartLines();
+}
+
+function updateChartLines() {
+  if (!chartReady) return;
+
+  const lg = d3.line().x(d => xS(d.year)).y(d => yS(d.tcsi)).curve(d3.curveCatmullRom.alpha(0.5));
+  const linesG = chartG.select('.clines');
+
+  RNAMES.forEach(region => {
+    const { hist, fut } = getChartSeries(region, S.scenario, S.season);
+    const col    = REGIONS[region].color;
+    const active = S.hoveredRegion === null || S.hoveredRegion === region;
+    const opacity = active ? 0.88 : 0.18;
+    const sw      = (S.hoveredRegion === region) ? 2.4 : 1.7;
+    const rid     = region.replace(/[^a-z]/gi,'_');
+
+    // Historical line
+    let hp = linesG.select(`#lh_${rid}`);
+    if (hp.empty()) hp = linesG.append('path').attr('id',`lh_${rid}`);
+    hp.datum(hist).transition().duration(480)
+      .attr('fill','none').attr('stroke',col)
+      .attr('stroke-width', sw).attr('opacity', opacity).attr('d', lg);
+
+    // Future line
+    const fid = `lf_${rid}`;
+    if (fut.length > 0) {
+      let fp = linesG.select(`#${fid}`);
+      if (fp.empty()) fp = linesG.append('path').attr('id', fid);
+      fp.datum(fut).transition().duration(480)
+        .attr('fill','none').attr('stroke',col)
+        .attr('stroke-width', sw).attr('opacity', opacity).attr('d', lg);
+    } else {
+      linesG.select(`#${fid}`).remove();
+    }
+  });
+
+  // Move year indicator
+  yLine.transition().duration(120).attr('x1', xS(S.year)).attr('x2', xS(S.year));
+}
+
+// ─── REGION LEGEND ────────────────────────────────────────────────
+function updateRegionLegend() {
+  const c = document.getElementById('region-legend');
+  c.innerHTML = '';
+  RNAMES.forEach(region => {
+    const t   = getTCSI(region, S.scenario, S.year, S.season);
+    const div = document.createElement('div');
+    div.className = 'rl-item';
+    div.innerHTML = `
+      <div class="rl-dot" style="background:${REGIONS[region].color}"></div>
+      <span class="rl-name">${region}</span>
+      <span class="rl-val" style="color:${colorScale(t)}">${t.toFixed(3)}</span>`;
+    div.addEventListener('mouseenter', () => {
+      S.hoveredRegion = region;
+      updateChartLines();
+      highlightRegion(region);
+    });
+    div.addEventListener('mouseleave', () => {
+      S.hoveredRegion = null;
+      updateChartLines();
+      clearHighlight();
+    });
+    c.appendChild(div);
+  });
+}
+
+// ─── CONTROLS ─────────────────────────────────────────────────────
+const slider      = document.getElementById('year-slider');
+const yearDisplay = document.getElementById('year-display');
+
+slider.addEventListener('input', () => {
+  S.year = +slider.value;
+  yearDisplay.textContent = S.year;
+  document.getElementById('badge-year').textContent = S.year;
+  updateMapFill();
+  if (chartReady) yLine.attr('x1', xS(S.year)).attr('x2', xS(S.year));
+  updateRegionLegend();
+});
+
+// Play button
+let playTimer = null;
+document.getElementById('play-btn').addEventListener('click', function() {
+  if (playTimer) {
+    clearInterval(playTimer); playTimer = null;
+    this.textContent = '▶';
+  } else {
+    this.textContent = '⏸';
+    const [mn, mx] = [+slider.min, +slider.max];
+    if (S.year >= mx) { S.year = mn; slider.value = mn; }
+    playTimer = setInterval(() => {
+      if (S.year >= +slider.max) {
+        clearInterval(playTimer); playTimer = null;
+        document.getElementById('play-btn').textContent = '▶';
+        return;
+      }
+      S.year++;
+      slider.value = S.year;
+      yearDisplay.textContent = S.year;
+      document.getElementById('badge-year').textContent = S.year;
+      updateMapFill();
+      if (chartReady) yLine.attr('x1', xS(S.year)).attr('x2', xS(S.year));
+      updateRegionLegend();
+    }, 75);
+  }
+});
+
+// Scenario tabs
+document.querySelectorAll('.scenario-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (playTimer) { clearInterval(playTimer); playTimer = null; document.getElementById('play-btn').textContent = '▶'; }
+    document.querySelectorAll('.scenario-tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    S.scenario = btn.dataset.scenario;
+
+    const isFuture = S.scenario !== 'historical';
+    const mn = isFuture ? 2015 : 1950;
+    const mx = isFuture ? 2100 : 2014;
+    slider.setAttribute('min', mn);
+    slider.setAttribute('max', mx);
+    if (S.year < mn || S.year > mx) { S.year = isFuture ? 2050 : 1990; }
+    slider.value = S.year;
+    yearDisplay.textContent = S.year;
+    document.getElementById('badge-year').textContent = S.year;
+    document.getElementById('range-min').textContent = mn;
+    document.getElementById('range-max').textContent = mx;
+    document.getElementById('chart-scenario-lbl').textContent = SCENARIO_LABELS[S.scenario];
+
+    updateMapFill();
+    updateChartLines();
+    updateRegionLegend();
+  });
+});
+
+// Season buttons
+document.querySelectorAll('.season-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.season-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    S.season = btn.dataset.season;
+    updateMapFill();
+    updateChartLines();
+    updateRegionLegend();
+  });
+});
+
+// ─── INIT ──────────────────────────────────────────────────────────
+d3.json('https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json').then(topo => {
+  initMap(topo);
+  requestAnimationFrame(() => {
+    initChart();
+    updateRegionLegend();
+  });
+}).catch(() => {
+  document.getElementById('map-svg').innerHTML =
+    `<text x="50%" y="50%" text-anchor="middle" fill="#5e7fa0"
+      font-family="Fira Code,monospace" font-size="13">
+      Could not load map — check your connection.
+    </text>`;
+});
+
+// Resize handler
+window.addEventListener('resize', () => {
+  const el = document.getElementById('map-svg');
+  const W = el.clientWidth, H = el.clientHeight;
+  const feats = { type:'FeatureCollection', features: stateFeatures };
+  if (stateFeatures.length === 0) return;
+  projection.fitSize([W * 0.94, H * 0.92], feats);
+  const [tx, ty] = projection.translate();
+  projection.translate([tx + W*0.03, ty + H*0.04]);
+  statesG.selectAll('.sp').attr('d', pathGen);
+  bordersG.select('path').attr('d', pathGen);
+  labelsG.selectAll('text').each(function(_, i) {
+    const region = RNAMES[i];
+    if (!region) return;
+    const [lon, lat] = REGION_LABEL_CENTERS[region];
+    const pt = projection([lon, lat]);
+    if (pt) d3.select(this).attr('x', pt[0]).attr('y', pt[1]);
+  });
+});
+</script>
+</body>
+</html>

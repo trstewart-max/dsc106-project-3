@@ -216,6 +216,79 @@
     .dev-table th { text-align:left; font-family:'Fira Code',monospace; font-size:10px; color:var(--text-dim); padding:6px 12px; border-bottom:1px solid var(--border); text-transform:uppercase; letter-spacing:1px; }
     .dev-table td { padding:8px 12px; border-bottom:1px solid #101e30; font-size:13px; color:#8aa8c8; }
     .dev-table tr:last-child td { border-bottom:none; }
+
+    /* ── GUIDED TOUR ── */
+    /* Button lives in the right panel */
+    .tour-panel-section {
+      padding:12px 22px; border-bottom:1px solid var(--border); flex-shrink:0;
+    }
+    .tour-panel-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+    #tour-btn {
+      padding:6px 14px; border-radius:6px;
+      border:1px solid rgba(0,212,255,0.45);
+      background:rgba(0,212,255,0.09);
+      color:var(--accent); font-family:'Fira Code',monospace; font-size:10px;
+      cursor:pointer; transition:all 0.2s; white-space:nowrap;
+    }
+    #tour-btn:hover { background:rgba(0,212,255,0.18); border-color:var(--accent); }
+    #tour-btn.active { background:rgba(239,68,68,0.12); border-color:#ef4444; color:#ef9494; }
+    .tour-panel-desc { font-family:'Fira Code',monospace; font-size:9px; color:var(--text-dim); line-height:1.5; }
+
+    /* Annotation card — upper-left of map */
+    #tour-annotation {
+      position:absolute; top:18px; left:18px;
+      background:rgba(4,10,22,0.95); backdrop-filter:blur(18px);
+      border:1px solid rgba(0,212,255,0.22); border-radius:11px;
+      padding:16px 18px 14px; width:260px;
+      opacity:0; pointer-events:none;
+      transition:opacity 0.4s ease, transform 0.4s ease;
+      transform:translateY(-6px);
+      z-index:60;
+    }
+    #tour-annotation.visible {
+      opacity:1; pointer-events:auto; transform:translateY(0);
+    }
+    .tour-step-label {
+      font-family:'Fira Code',monospace; font-size:9px;
+      color:var(--accent); text-transform:uppercase; letter-spacing:1.5px;
+      margin-bottom:8px;
+    }
+    .tour-step-title {
+      font-size:15px; font-weight:800; color:var(--text);
+      margin-bottom:9px; line-height:1.3;
+    }
+    .tour-annotation-text {
+      font-size:12px; color:#8aa8c8; line-height:1.65; margin-bottom:13px;
+    }
+    .tour-nav {
+      display:flex; align-items:center; gap:8px;
+    }
+    .tour-nav-btn {
+      padding:5px 12px; border-radius:5px;
+      border:1px solid rgba(0,212,255,0.3);
+      background:rgba(0,212,255,0.08); color:var(--accent);
+      font-family:'Fira Code',monospace; font-size:10px;
+      cursor:pointer; transition:all 0.15s;
+    }
+    .tour-nav-btn:hover { background:rgba(0,212,255,0.18); }
+    .tour-exit-btn {
+      padding:5px 12px; border-radius:5px;
+      border:1px solid rgba(255,255,255,0.1);
+      background:transparent; color:var(--text-dim);
+      font-family:'Fira Code',monospace; font-size:10px;
+      cursor:pointer; transition:all 0.15s;
+    }
+    .tour-exit-btn:hover { border-color:#ef4444; color:#ef9494; }
+    .tour-counter {
+      font-family:'Fira Code',monospace; font-size:10px;
+      color:var(--text-dim); margin-left:auto;
+    }
+
+    /* Map dim overlay during tour */
+    #tour-dim {
+      position:absolute; inset:0; background:rgba(4,10,22,0);
+      pointer-events:none; transition:background 0.6s; z-index:5;
+    }
   </style>
 </head>
 <body>
@@ -239,7 +312,7 @@
       </button>
 
       <button class="scenario-tab ssp126" data-scenario="ssp126">
-        🌿 Best Case
+        Best Case
         <div class="scenario-tooltip">
           <h4>Best Case — Strong Climate Action</h4>
           <p>Global emissions peak before 2025, then fall sharply to near-zero by 2075. Requires massive investment in clean energy and major policy changes. Warming stays below 2°C.</p>
@@ -247,7 +320,7 @@
       </button>
 
       <button class="scenario-tab ssp245" data-scenario="ssp245">
-        🌤 Middle Road
+        Middle Road
         <div class="scenario-tooltip">
           <h4>Middle Road — Moderate Action</h4>
           <p>Some climate policies are adopted but not enough to fully stop warming. Emissions stabilize around 2050 and slowly decline. Warming reaches roughly 2.5–3°C by 2100. The most likely current trajectory.</p>
@@ -255,7 +328,7 @@
       </button>
 
       <button class="scenario-tab ssp585" data-scenario="ssp585">
-        🔥 Worst Case
+        Worst Case
         <div class="scenario-tooltip">
           <h4>Worst Case — No Climate Action</h4>
           <p>Fossil fuel use doubles by 2050 with no major policy changes. Temperatures rise 4–5°C above pre-industrial levels by 2100. Represents the high-end of what's physically possible.</p>
@@ -297,9 +370,17 @@
 
 
 
-    <!-- REGION DETAIL PANEL -->
+    <div id="tour-dim"></div>
+
+    <!-- TOUR ANNOTATION -->
+    <div id="tour-annotation">
+      <div class="tour-step-label" id="tour-step-label">Climate Story</div>
+      <div class="tour-step-title" id="tour-step-title"></div>
+      <div class="tour-annotation-text" id="tour-annotation-text"></div>
+      <div class="tour-nav" id="tour-nav"></div>
+    </div>
     <div class="region-detail" id="region-detail">
-      <button class="rd-close" id="rd-close">✕</button>
+      <button class="rd-close" id="rd-close">Close</button>
       <div class="rd-region-name" id="rd-name">—</div>
       <div class="rd-region-tagline" id="rd-tagline">—</div>
 
@@ -342,7 +423,7 @@
         <span id="year-display">1980</span>
       </div>
       <div class="slider-row">
-        <button id="play-btn">▶</button>
+        <button id="play-btn">Play</button>
         <input type="range" id="year-slider" min="1950" max="2014" value="1980" step="1">
       </div>
       <div class="slider-range-labels">
@@ -360,6 +441,14 @@
         <button class="season-btn"        data-season="summer">Summer</button>
         <button class="season-btn"        data-season="fall">Fall</button>
       </div>
+    </div>
+
+    <div class="tour-panel-section">
+      <div class="tour-panel-row">
+        <span class="ctrl-label">Guided Tour</span>
+        <button id="tour-btn">Start Climate Story</button>
+      </div>
+      <div class="tour-panel-desc">Jump through the clearest regional changes without touching the controls.</div>
     </div>
 
     <div class="chart-area">
@@ -399,12 +488,13 @@
     <p>
       A static map freezes time; a static line chart loses geography. The linked
       <strong>choropleth map + time-series chart</strong> is the only layout that answers both
-      "where?" and "when?" simultaneously. Critically, the <strong>season selector</strong>
+      "where?" and "when?" simultaneously. The <strong>season selector</strong>
       reveals patterns invisible in a static view — the South's summer comfort collapses under
-      the worst-case scenario while the Northwest Mountain region's winter score holds up well
-      due to continued snowfall. The <strong>click-to-detail panel</strong> lets users dig into
-      the specific variables driving change in each region, providing a layer of insight that
-      no single chart could convey alone.
+      the worst-case scenario while the Northwest Mountain region's winter score holds up due
+      to continued snowfall. The <strong>click-to-detail panel</strong> lets users dig into
+      the specific variables driving change in each region. Finally, the <strong>guided Climate Story tour</strong>
+      walks first-time visitors through the five most important findings automatically, lowering
+      the learning curve without removing any controls for exploratory users.
     </p>
     <div class="writeup-grid">
       <div class="writeup-card">
@@ -434,26 +524,30 @@
         <p>We deliberately avoided jargon (SSP, TCSI, tas) in favor of plain English
         ("Best Case", "Vacation Comfort Score", "Worst Case"). Hover tooltips on scenario
         tabs explain the climate science to general audiences. The click panel contextualizes
-        numbers with plain-language driving factors.</p>
+        numbers with plain-language driving factors. The <strong>guided Climate Story</strong>
+        mode walks new visitors through the five key findings automatically, making the
+        visualization approachable even without prior climate knowledge.</p>
       </div>
     </div>
 
     <h2 style="margin-top:40px;">Development Process</h2>
-    <p>Developed over approximately two weeks. Update the table below with real names and hours.</p>
+    <p>Developed over approximately two weeks across a team of four, totaling roughly 23 people-hours.</p>
     <table class="dev-table">
       <thead><tr><th>Team Member</th><th>Contribution</th><th>~Hours</th></tr></thead>
       <tbody>
-        <tr><td>[Member 1]</td><td>CMIP6 data loading, comfort score design, Python pipeline</td><td>~12 hrs</td></tr>
-        <tr><td>[Member 2]</td><td>D3 choropleth map, tooltip, click-to-detail panel</td><td>~10 hrs</td></tr>
-        <tr><td>[Member 3]</td><td>D3 line chart, year slider, play animation, season controls</td><td>~10 hrs</td></tr>
-        <tr><td>[Member 4]</td><td>Design, consumer-friendly copy, writeup, testing</td><td>~8 hrs</td></tr>
+        <tr><td>Triton Stewart</td><td>CMIP6 data loading, comfort score design, Python pipeline, data export</td><td>~8 hrs</td></tr>
+        <tr><td>Kala Nguyen</td><td>D3 choropleth map, binned color scale, tooltip, click-to-detail panel</td><td>~6 hrs</td></tr>
+        <tr><td>Jiya Sreejesh</td><td>D3 line chart, year slider, play animation, season controls, guided tour</td><td>~5 hrs</td></tr>
+        <tr><td>Harshini Kanakala</td><td>Design system, consumer-friendly copy, scenario descriptions, writeup, testing</td><td>~4 hrs</td></tr>
       </tbody>
     </table>
     <p style="margin-top:16px;">
       The most time-consuming aspect was preprocessing CMIP6 data — aligning coordinates across
-      scenarios and handling 0–360° longitude conventions. Making the visualization accessible
-      to a general audience (removing jargon, writing clear scenario descriptions) also required
-      significant iteration.
+      scenarios and handling the 0–360° longitude convention. Designing the guided Climate Story
+      tour to feel cinematic without cluttering the interface also required significant iteration,
+      particularly ensuring the year animation, scenario switching, and region highlighting all
+      stayed synchronized. Making the visualization accessible to a general audience through
+      plain-language copy and scenario explanations rounded out the effort.
     </p>
   </div>
 </div>
@@ -474,9 +568,9 @@ const REGION_META = {
     tagline:'California, Oregon & Washington — sunny, mild, and dry.',
     tourism:'Famous for beaches, wine country, national parks, and coastal cities. Thrives on mild dry summers.',
     variables:[
-      { name:'🌡 Temperature Comfort', key:'temp', goodRange:'12–22°C (54–72°F)', note:'Mild Mediterranean climate is ideal. Rising heat pushes summers toward the uncomfortable range.' },
-      { name:'🌧 Rainfall Impact',     key:'rain', goodRange:'Low to moderate', note:'Dry summers are a big draw. Increasing drought may reduce scenic appeal but keeps rain low.' },
-      { name:'☀ Outdoor Season',      key:'outdoor', goodRange:'Spring through Fall', note:'Long outdoor season is a strength, but summer heat extremes are creeping northward.' },
+      { name:'Temperature Comfort', key:'temp', goodRange:'12–22°C (54–72°F)', note:'Mild Mediterranean climate is ideal. Rising heat pushes summers toward the uncomfortable range.' },
+      { name:'Rainfall Impact',     key:'rain', goodRange:'Low to moderate', note:'Dry summers are a big draw. Increasing drought may reduce scenic appeal but keeps rain low.' },
+      { name:'Outdoor Season',      key:'outdoor', goodRange:'Spring through Fall', note:'Long outdoor season is a strength, but summer heat extremes are creeping northward.' },
     ],
     insight: (year, scen) => year < 2050
       ? `As of ${year}, the West Coast remains a strong destination. Mild temperatures and dry summers keep comfort scores high.`
@@ -488,9 +582,9 @@ const REGION_META = {
     tagline:'Montana, Idaho, Wyoming, Colorado & the Rockies.',
     tourism:'Ski resorts, hiking, wildlife, and summer alpine tourism. Heavily dependent on winter snowpack.',
     variables:[
-      { name:'❄ Winter Snowpack',     key:'snow', goodRange:'Heavy snow Nov–Mar', note:'Ski tourism lives and dies by snowfall. Warming winters are the single biggest threat to this region.' },
-      { name:'🌡 Summer Temperatures', key:'temp', goodRange:'15–25°C (59–77°F)', note:'Cool summers are a major draw for hikers and campers escaping lowland heat.' },
-      { name:'🌧 Precipitation',      key:'rain', goodRange:'Moderate, seasonal', note:'Adequate rainfall supports lush summer landscapes that attract visitors.' },
+      { name:'Winter Snowpack',     key:'snow', goodRange:'Heavy snow Nov–Mar', note:'Ski tourism lives and dies by snowfall. Warming winters are the single biggest threat to this region.' },
+      { name:'Summer Temperatures', key:'temp', goodRange:'15–25°C (59–77°F)', note:'Cool summers are a major draw for hikers and campers escaping lowland heat.' },
+      { name:'Precipitation',      key:'rain', goodRange:'Moderate, seasonal', note:'Adequate rainfall supports lush summer landscapes that attract visitors.' },
     ],
     insight: (year, scen) => year < 2050
       ? `As of ${year}, the Rockies are a premier year-round destination. Winter skiing and summer hiking both score well.`
@@ -502,9 +596,9 @@ const REGION_META = {
     tagline:'Texas, Florida, Georgia & the Gulf Coast.',
     tourism:'Beach tourism, theme parks, culture, and winter sun-seekers. Vulnerable to extreme heat.',
     variables:[
-      { name:'🌡 Heat Stress',         key:'temp', goodRange:'18–28°C (64–82°F)', note:'The South already pushes comfort limits in summer. Each degree of warming shrinks the comfortable window further.' },
-      { name:'💧 Humidity & Rainfall', key:'rain', goodRange:'Moderate', note:'High humidity amplifies heat discomfort. Hurricane seasons and flooding risk also affect tourism.' },
-      { name:'🌴 Winter Appeal',       key:'outdoor', goodRange:'Oct–Apr', note:'Winter is peak season for much of the South. Warming may actually extend this comfortable window slightly.' },
+      { name:'Heat Stress',         key:'temp', goodRange:'18–28°C (64–82°F)', note:'The South already pushes comfort limits in summer. Each degree of warming shrinks the comfortable window further.' },
+      { name:'Humidity & Rainfall', key:'rain', goodRange:'Moderate', note:'High humidity amplifies heat discomfort. Hurricane seasons and flooding risk also affect tourism.' },
+      { name:'Winter Appeal',       key:'outdoor', goodRange:'Oct–Apr', note:'Winter is peak season for much of the South. Warming may actually extend this comfortable window slightly.' },
     ],
     insight: (year, scen) => year < 2050
       ? `As of ${year}, the South's winter appeal remains strong. Summers are already hot but manageable for beach tourism.`
@@ -516,9 +610,9 @@ const REGION_META = {
     tagline:'New England down to DC — four distinct seasons.',
     tourism:'History, fall foliage, summer beaches, city tourism, and skiing in Vermont & upstate New York.',
     variables:[
-      { name:'🍂 Fall Foliage Season',  key:'outdoor', goodRange:'Sept–Nov', note:'Iconic fall colors depend on cool nights and warm days. Warmer autumns are gradually delaying and shortening the season.' },
-      { name:'🌡 Year-round Comfort',   key:'temp', goodRange:'10–24°C (50–75°F)', note:'Moderate four-season climate is the East Coast\'s main strength. This balance erodes gradually with warming.' },
-      { name:'🌧 Coastal Storms',       key:'rain', goodRange:'Moderate, spread year-round', note:'Increased storm intensity and flooding risk may affect coastal and urban tourism infrastructure.' },
+      { name:'Fall Foliage Season',  key:'outdoor', goodRange:'Sept–Nov', note:'Iconic fall colors depend on cool nights and warm days. Warmer autumns are gradually delaying and shortening the season.' },
+      { name:'Year-round Comfort',   key:'temp', goodRange:'10–24°C (50–75°F)', note:'Moderate four-season climate is the East Coast\'s main strength. This balance erodes gradually with warming.' },
+      { name:'Coastal Storms',       key:'rain', goodRange:'Moderate, spread year-round', note:'Increased storm intensity and flooding risk may affect coastal and urban tourism infrastructure.' },
     ],
     insight: (year, scen) => year < 2050
       ? `As of ${year}, the East Coast's four-season appeal remains largely intact. Mild springs and warm summers attract consistent tourism.`
@@ -544,9 +638,9 @@ const FIPS_REGION = {
 
 const SCENARIO_LABELS = {
   historical:'Past (1950–2014)',
-  ssp126:'🌿 Best Case (2015–2100)',
-  ssp245:'🌤 Middle Road (2015–2100)',
-  ssp585:'🔥 Worst Case (2015–2100)',
+  ssp126:'Best Case (2015–2100)',
+  ssp245:'Middle Road (2015–2100)',
+  ssp585:'Worst Case (2015–2100)',
 };
 
 const SEASON_MOD = {
@@ -558,11 +652,11 @@ const SEASON_MOD = {
 };
 
 const SEASON_ANNOTATIONS = {
-  annual:'📊 All regions trend downward long-term — but the South drops fastest',
-  winter:'⛷️ Mountain/Rockies hold up best in winter — skiing remains viable longer',
-  spring:'🌸 Spring is the most climate-stable season across all regions',
-  summer:'🌡️ The South\'s summer comfort collapses sharply under worst-case warming after 2060',
-  fall:  '🍂 Fall stays comfortable longest — the best future season for East Coast tourism',
+  annual:'All regions trend downward long-term — but the South drops fastest',
+  winter:'Mountain/Rockies hold up best in winter — skiing remains viable longer',
+  spring:'Spring is the most climate-stable season across all regions',
+  summer:'The South\'s summer comfort collapses sharply under worst-case warming after 2060',
+  fall:  'Fall stays comfortable longest — the best future season for East Coast tourism',
 };
 
 // ── BINNED COLOR SCALE ─────────────────────────────────────────────────
@@ -910,11 +1004,11 @@ slider.addEventListener('input',()=>{
 
 let playTimer=null;
 document.getElementById('play-btn').addEventListener('click',function(){
-  if(playTimer){ clearInterval(playTimer);playTimer=null;this.textContent='▶';return; }
-  this.textContent='⏸';
+  if(playTimer){ clearInterval(playTimer);playTimer=null;this.textContent='Play';return; }
+  this.textContent='Pause';
   if(S.year>=+slider.max){ S.year=+slider.min;slider.value=S.year; }
   playTimer=setInterval(()=>{
-    if(S.year>=+slider.max){ clearInterval(playTimer);playTimer=null;document.getElementById('play-btn').textContent='▶';return; }
+    if(S.year>=+slider.max){ clearInterval(playTimer);playTimer=null;document.getElementById('play-btn').textContent='Play';return; }
     S.year++;slider.value=S.year;yearDisplay.textContent=S.year;
     document.getElementById('badge-year').textContent=S.year;
     updateMapFill();
@@ -925,7 +1019,7 @@ document.getElementById('play-btn').addEventListener('click',function(){
 
 document.querySelectorAll('.scenario-tab').forEach(btn=>{
   btn.addEventListener('click',()=>{
-    if(playTimer){ clearInterval(playTimer);playTimer=null;document.getElementById('play-btn').textContent='▶'; }
+    if(playTimer){ clearInterval(playTimer);playTimer=null;document.getElementById('play-btn').textContent='Play'; }
     document.querySelectorAll('.scenario-tab').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active'); S.scenario=btn.dataset.scenario;
     const isFuture=S.scenario!=='historical';
@@ -957,6 +1051,252 @@ d3.json('https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json').then(topo=>{
   document.getElementById('map-svg').innerHTML=
     `<text x="50%" y="50%" text-anchor="middle" fill="#5e7fa0" font-family="Fira Code,monospace" font-size="13">Could not load map.</text>`;
 });
+
+
+// ═══════════════════════════════════════════════════════════════
+// GUIDED TOUR ENGINE
+// ═══════════════════════════════════════════════════════════════
+
+const TOUR_STEPS = [
+  {
+    label: 'Climate Story',
+    title: 'Start with the historical baseline',
+    text:  'In the past view, use 1980 as a familiar baseline. The East Coast begins as one of the most comfortable regions because its seasonal climate is balanced.',
+    scenario: 'historical', season:'annual', year:1980, focus:null,
+  },
+  {
+    label: 'Climate Story',
+    title: 'The South overheats by summer',
+    text:  'Under extreme warming, summer comfort in the South collapses dramatically. Rising heat stress pushes the region toward the bottom of the comfort scale by 2080.',
+    scenario: 'ssp585', season:'summer', year:2080, focus:'South', animateFrom:2015,
+  },
+  {
+    label: 'Climate Story',
+    title: 'Mountain regions hold their ground',
+    text:  'Higher elevation keeps the Rockies resilient in winter. Ski and alpine tourism survives far longer here than in lowland regions under the same emissions path.',
+    scenario: 'ssp585', season:'winter', year:2070, focus:'Northwest / Mountain',
+  },
+  {
+    label: 'Climate Story',
+    title: 'The East Coast stays balanced in fall',
+    text:  'Four distinct seasons give the East Coast flexibility. Fall comfort holds up well even under the middle-road scenario — a relative strength compared to the South.',
+    scenario: 'ssp245', season:'fall', year:2060, focus:'East Coast',
+  },
+  {
+    label: 'Climate Story',
+    title: 'The full picture by 2100',
+    text:  'Climate change reshapes US tourism unevenly. Some regions adapt, others struggle. Seasonal patterns shift — and decisions made today determine which future unfolds.',
+    scenario: 'ssp585', season:'annual', year:2100, focus:null,
+  },
+];
+
+let tourActive    = false;
+let tourStep      = 0;
+let tourTimers    = [];
+let tourSavedState = null;
+
+function tourClearTimers() {
+  tourTimers.forEach(t => clearTimeout(t));
+  tourTimers = [];
+}
+
+function tourDelay(ms) {
+  return new Promise(res => {
+    const t = setTimeout(res, ms);
+    tourTimers.push(t);
+  });
+}
+
+// Apply a scenario change the same way the tab buttons do
+function tourSetScenario(scenario) {
+  if (S.scenario === scenario) return;
+  if (playTimer) { clearInterval(playTimer); playTimer = null; document.getElementById('play-btn').textContent = '▶'; }
+  document.querySelectorAll('.scenario-tab').forEach(b => b.classList.remove('active'));
+  const btn = document.querySelector(`.scenario-tab[data-scenario="${scenario}"]`);
+  if (btn) btn.classList.add('active');
+  S.scenario = scenario;
+  const isFuture = scenario !== 'historical';
+  const mn = isFuture ? 2015 : 1950, mx = isFuture ? 2100 : 2014;
+  slider.setAttribute('min', mn); slider.setAttribute('max', mx);
+  document.getElementById('range-min').textContent = mn;
+  document.getElementById('range-max').textContent = mx;
+  document.getElementById('chart-scenario-lbl').textContent = SCENARIO_LABELS[scenario];
+}
+
+function tourSetSeason(season) {
+  document.querySelectorAll('.season-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.querySelector(`.season-btn[data-season="${season}"]`);
+  if (btn) btn.classList.add('active');
+  S.season = season;
+}
+
+async function tourSetYear(targetYear, animate = false, fromYear = null) {
+  const start = fromYear !== null ? fromYear : S.year;
+  if (!animate || Math.abs(targetYear - start) < 2) {
+    S.year = targetYear;
+    slider.value = targetYear;
+    yearDisplay.textContent = targetYear;
+    document.getElementById('badge-year').textContent = targetYear;
+    updateMapFill();
+    if (chartReady) yLine.attr('x1', xS(S.year)).attr('x2', xS(S.year));
+    updateRegionLegend();
+    return;
+  }
+  // Animate year step by step
+  const step = targetYear > start ? 1 : -1;
+  const msPerYear = 55;
+  let y = start;
+  await new Promise(res => {
+    const iv = setInterval(() => {
+      if (!tourActive) { clearInterval(iv); res(); return; }
+      y += step;
+      S.year = y; slider.value = y;
+      yearDisplay.textContent = y;
+      document.getElementById('badge-year').textContent = y;
+      updateMapFill();
+      if (chartReady) yLine.attr('x1', xS(y)).attr('x2', xS(y));
+      updateRegionLegend();
+      if (y === targetYear) { clearInterval(iv); res(); }
+    }, msPerYear);
+    tourTimers.push(iv);
+  });
+}
+
+function tourFocusRegion(region) {
+  S.hoveredRegion = null;
+  S.clickedRegion = region;
+  if (region) {
+    highlightRegion(region);
+  } else {
+    clearHighlight();
+    S.clickedRegion = null;
+  }
+  updateChartLines();
+}
+
+function buildTourNav(stepIdx) {
+  const nav = document.getElementById('tour-nav');
+  nav.innerHTML = '';
+
+  const nextBtn = document.createElement('button');
+  nextBtn.className = 'tour-nav-btn';
+  nextBtn.textContent = stepIdx < TOUR_STEPS.length - 1 ? 'Next' : 'Finish';
+  nextBtn.addEventListener('click', () => {
+    if (stepIdx < TOUR_STEPS.length - 1) { tourStep++; runTourStep(tourStep); }
+    else stopTour();
+  });
+  nav.appendChild(nextBtn);
+
+  const exitBtn = document.createElement('button');
+  exitBtn.className = 'tour-exit-btn';
+  exitBtn.textContent = 'Exit';
+  exitBtn.addEventListener('click', stopTour);
+  nav.appendChild(exitBtn);
+
+  const counter = document.createElement('span');
+  counter.className = 'tour-counter';
+  counter.textContent = `${stepIdx + 1}/${TOUR_STEPS.length}`;
+  nav.appendChild(counter);
+}
+
+async function runTourStep(i) {
+  if (!tourActive) return;
+  tourClearTimers();
+  const step = TOUR_STEPS[i];
+
+  // Hide annotation briefly for transition
+  const ann = document.getElementById('tour-annotation');
+  ann.classList.remove('visible');
+  await tourDelay(300);
+  if (!tourActive) return;
+
+  // Apply state changes
+  tourSetScenario(step.scenario);
+  tourSetSeason(step.season);
+  updateAnnotation();
+
+  // Animate year if needed
+  const shouldAnimate = step.animateFrom !== undefined;
+  if (shouldAnimate) {
+    await tourSetYear(step.animateFrom, false);
+    await tourDelay(400);
+    if (!tourActive) return;
+    await tourSetYear(step.year, true, step.animateFrom);
+  } else {
+    await tourSetYear(step.year, false);
+  }
+  if (!tourActive) return;
+
+  // Focus region
+  tourFocusRegion(step.focus || null);
+
+  // Show annotation
+  document.getElementById('tour-step-label').textContent = step.label;
+  document.getElementById('tour-step-title').textContent = step.title;
+  document.getElementById('tour-annotation-text').textContent = step.text;
+  buildTourNav(i);
+  await tourDelay(200);
+  if (!tourActive) return;
+  ann.classList.add('visible');
+}
+
+function startTour() {
+  if (tourActive) { stopTour(); return; }
+  tourActive = true;
+  tourStep = 0;
+
+  // Save current state to restore later
+  tourSavedState = {
+    scenario: S.scenario, season: S.season, year: S.year,
+    hoveredRegion: S.hoveredRegion, clickedRegion: S.clickedRegion,
+  };
+
+  // Close detail panel if open
+  document.getElementById('region-detail').classList.remove('open');
+
+  const btn = document.getElementById('tour-btn');
+  btn.textContent = 'Exit Story';
+  btn.classList.add('active');
+
+  runTourStep(0);
+}
+
+function stopTour() {
+  tourActive = false;
+  tourClearTimers();
+
+  // Hide annotation
+  document.getElementById('tour-annotation').classList.remove('visible');
+
+  // Update button
+  const btn = document.getElementById('tour-btn');
+  btn.textContent = 'Start Climate Story';
+  btn.classList.remove('active');
+
+  // Restore saved state
+  if (tourSavedState) {
+    tourSetScenario(tourSavedState.scenario);
+    tourSetSeason(tourSavedState.season);
+    S.hoveredRegion = null;
+    S.clickedRegion = null;
+    clearHighlight();
+    tourSetYear(tourSavedState.year, false);
+    updateChartLines();
+    updateAnnotation();
+    updateRegionLegend();
+    tourSavedState = null;
+  }
+}
+
+document.getElementById('tour-btn').addEventListener('click', () => {
+  if (tourActive) stopTour(); else startTour();
+});
+
+// Clicking map during tour exits tour gracefully
+document.getElementById('map-svg').addEventListener('click', () => {
+  if (tourActive) stopTour();
+}, { capture: true, passive: true });
+
 
 window.addEventListener('resize',()=>{
   if(!stateFeatures.length) return;

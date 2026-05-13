@@ -45,7 +45,7 @@
     .scenario-tab.active.ssp585 { background:#ef4444; border-color:#ef4444; color:#fff; font-weight:700; }
     /* scenario hover tooltip */
     .scenario-tooltip {
-      display:none; position:absolute; bottom:calc(100% + 8px); right:0;
+      display:none; position:absolute; top:calc(100% + 8px); right:0;
       background:rgba(4,10,22,0.97); backdrop-filter:blur(12px);
       border:1px solid var(--border); border-radius:9px;
       padding:12px 14px; width:240px; z-index:200; pointer-events:none;
@@ -53,8 +53,8 @@
     .scenario-tooltip h4 { font-size:12px; font-weight:700; margin-bottom:5px; color:var(--text); }
     .scenario-tooltip p  { font-size:11px; color:#8aa8c8; line-height:1.55; }
     .scenario-tooltip::after {
-      content:''; position:absolute; top:100%; right:18px;
-      border:6px solid transparent; border-top-color:var(--border);
+      content:''; position:absolute; bottom:100%; right:18px;
+      border:6px solid transparent; border-bottom-color:var(--border);
     }
 
     /* ── DATA CONTEXT BAR ── */
@@ -85,14 +85,7 @@
     .year-badge-num { font-family:'Fira Code',monospace; font-size:30px; font-weight:500; color:var(--accent); line-height:1; }
     .year-badge-lbl { font-family:'Fira Code',monospace; font-size:9px; color:var(--text-dim); text-transform:uppercase; letter-spacing:1.5px; margin-top:2px; }
 
-    /* Click hint */
-    .map-hint {
-      position:absolute; bottom:20px; right:20px;
-      background:rgba(6,13,27,0.82); backdrop-filter:blur(10px);
-      border:1px solid var(--border); border-radius:8px;
-      padding:8px 12px; pointer-events:none;
-      font-family:'Fira Code',monospace; font-size:10px; color:var(--text-dim);
-    }
+
 
     /* Legend */
     .color-legend {
@@ -302,7 +295,7 @@
       <div class="legend-bins" id="legend-bins"></div>
     </div>
 
-    <div class="map-hint">🖱 Click any state for a detailed breakdown</div>
+
 
     <!-- REGION DETAIL PANEL -->
     <div class="region-detail" id="region-detail">
